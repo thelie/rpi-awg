@@ -16,13 +16,13 @@ ISP → GL-iNet GL-AXT1800 (192.168.8.1, AdGuard Home) → LAN → RPi 5 (192.16
 
 **Traffic flow:**
 ```
-WiFi Client → RPi (default gw) → awg0 (MASQUERADE) → VPN server (66.234.150.50:9911) → Internet
+WiFi Client → RPi (default gw) → awg0 (MASQUERADE) → VPN server (203.0.113.1:51820) → Internet
 DNS: Client → AdGuard (192.168.8.1:53) → upstream 100.64.0.1 (inside VPN tunnel)
 ```
 
 **Files involved:**
 - `fi.conf` — AmneziaWG v2 config with obfuscation params (Jc, Jmin, Jmax, S1, S2, H1-H4)
-- VPN interface: `100.82.12.12/32`, endpoint: `66.234.150.50:9911`
+- VPN interface: `10.0.0.2/32`, endpoint: `203.0.113.1:51820`
 
 **Key design decisions (from brainstorm):**
 - Single container, host network mode, `NET_ADMIN` only (no `SYS_MODULE`)
@@ -59,7 +59,7 @@ DNS: Client → AdGuard (192.168.8.1:53) → upstream 100.64.0.1 (inside VPN tun
   ```
   LAN_SUBNET=192.168.8.0/24
   GATEWAY_IP=192.168.8.1
-  VPN_ENDPOINT_IP=66.234.150.50
+  VPN_ENDPOINT_IP=203.0.113.1
   VPN_ENDPOINT_PORT=9911
   ```
 - [ ] Create `config/.gitkeep` so the directory is tracked
