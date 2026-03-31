@@ -1,0 +1,20 @@
+services:
+  awg-client:
+    build: .
+    container_name: awg-client
+    cap_add:
+      - NET_ADMIN
+    network_mode: host
+    # sysctls not allowed with host network mode — set on host via /etc/sysctl.d/
+    devices:
+      - /dev/net/tun:/dev/net/tun
+    volumes:
+      - ./config:/etc/amneziawg:ro
+    env_file: .env
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "ping", "-c1", "-W3", "-I", "awg0", "1.1.1.1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s

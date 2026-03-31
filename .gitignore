@@ -1,0 +1,19 @@
+# VPN configs (contain private keys)
+*.conf
+config/*.conf
+config/*.key
+!config/.gitkeep
+!scripts/dnsmasq.conf
+
+# Environment
+.env
+
+# Logs
+*.log
+
+# Docker
+.docker/
+
+# OS
+.DS_Store
+Thumbs.db
