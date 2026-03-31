@@ -11,6 +11,9 @@ config/*.key
 # Logs
 *.log
 
+# Plans (internal)
+docs/plans/
+
 # Docker
 .docker/
 
