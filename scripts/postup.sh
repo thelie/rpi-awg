@@ -104,5 +104,7 @@ iptables -A FORWARD -i eth0 -o eth0 -m state --state ESTABLISHED,RELATED -j ACCE
 iptables -t nat -A POSTROUTING -o awg0 -j MASQUERADE
 # NAT for bypassed traffic going direct
 iptables -t nat -A POSTROUTING -o eth0 -m mark --mark 100 -j MASQUERADE
+# Restore Docker bridge NAT (our nat flush at the top removes it)
+iptables -t nat -A POSTROUTING -s 172.17.0.0/16 ! -o docker0 -j MASQUERADE
 
 echo "iptables rules applied. Kill switch active. Domain bypass enabled."

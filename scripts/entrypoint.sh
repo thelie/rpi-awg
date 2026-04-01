@@ -31,6 +31,8 @@ cleanup() {
     iptables -P INPUT ACCEPT 2>/dev/null || true
     iptables -P FORWARD ACCEPT 2>/dev/null || true
     iptables -P OUTPUT ACCEPT 2>/dev/null || true
+    # Restore Docker bridge NAT (our nat flush removes it)
+    iptables -t nat -A POSTROUTING -s 172.17.0.0/16 ! -o docker0 -j MASQUERADE 2>/dev/null || true
     # Clean up policy routing and ipset
     ip rule del fwmark 100 table 100 2>/dev/null || true
     ip route flush table 100 2>/dev/null || true
@@ -85,9 +87,8 @@ source /scripts/postup.sh
 
 # --- Start dnsmasq for domain-based bypass ---
 echo "Starting dnsmasq for domain bypass..."
-sed "s/__UPSTREAM_DNS__/$GATEWAY_IP/" /scripts/dnsmasq.conf > /tmp/dnsmasq.conf
-dnsmasq -C /tmp/dnsmasq.conf
-echo "dnsmasq listening on port 5353 (upstream: $GATEWAY_IP)"
+dnsmasq -C /scripts/dnsmasq.conf
+echo "dnsmasq listening on port 5353"
 
 echo "Gateway ready. Starting watchdog..."
 

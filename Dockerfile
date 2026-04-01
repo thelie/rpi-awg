@@ -1,23 +1,17 @@
 # Stage 1: Build amneziawg-go and tools
 FROM golang:1.24-alpine AS builder
 
-RUN apk add --no-cache git make gcc musl-dev linux-headers bash
+RUN apk add --no-cache make gcc musl-dev linux-headers bash
 
-# Pin to specific commits for reproducible builds
-ARG AWG_GO_COMMIT=e7ef4339e718641fc7bc1b0ea41b538108de77cc
-ARG AWG_TOOLS_COMMIT=5d6179a6d0842e98dfb349c28cf1bd8e4b9d1079
+# Copy local source trees (avoids git clone during build)
+COPY amneziawg-go/ /src/amneziawg-go/
+COPY amneziawg-tools/ /src/amneziawg-tools/
 
 # Build amneziawg-go (userspace daemon)
-RUN git clone https://github.com/amnezia-vpn/amneziawg-go.git /src/amneziawg-go && \
-    cd /src/amneziawg-go && \
-    git checkout ${AWG_GO_COMMIT} && \
-    make
+RUN cd /src/amneziawg-go && make
 
 # Build amneziawg-tools (awg, awg-quick)
-RUN git clone https://github.com/amnezia-vpn/amneziawg-tools.git /src/amneziawg-tools && \
-    cd /src/amneziawg-tools && \
-    git checkout ${AWG_TOOLS_COMMIT} && \
-    cd src && \
+RUN cd /src/amneziawg-tools/src && \
     make && \
     make install DESTDIR=/tools WITH_WGQUICK=yes
 
