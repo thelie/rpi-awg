@@ -22,7 +22,7 @@ RUN git clone https://github.com/amnezia-vpn/amneziawg-tools.git /src/amneziawg-
     make install DESTDIR=/tools WITH_WGQUICK=yes
 
 # Stage 2: Minimal runtime
-FROM alpine:3.21
+FROM alpine:3.21.3
 
 RUN apk add --no-cache \
     iptables \

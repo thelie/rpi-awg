@@ -6,6 +6,7 @@ CONF_RUNTIME="/tmp/awg0.conf"
 WATCHDOG_INTERVAL=30
 HANDSHAKE_MAX_AGE=180
 MAX_FAILURES=3
+PING_TARGET="${PING_TARGET:-100.64.0.1}"
 
 echo "=== AmneziaWG Gateway ==="
 
@@ -20,15 +21,22 @@ fi
 # --- Cleanup on exit ---
 cleanup() {
     echo "Shutting down..."
+    # Kill backgrounded sleep if running
+    [ -n "$sleep_pid" ] && kill "$sleep_pid" 2>/dev/null
     awg-quick down "$CONF_RUNTIME" 2>/dev/null || true
     iptables -F 2>/dev/null || true
     iptables -t nat -F 2>/dev/null || true
     iptables -t mangle -F 2>/dev/null || true
+    iptables -X 2>/dev/null || true
     iptables -P INPUT ACCEPT 2>/dev/null || true
     iptables -P FORWARD ACCEPT 2>/dev/null || true
     iptables -P OUTPUT ACCEPT 2>/dev/null || true
+    # Clean up policy routing and ipset
+    ip rule del fwmark 100 table 100 2>/dev/null || true
+    ip route flush table 100 2>/dev/null || true
+    ipset destroy bypass_domains 2>/dev/null || true
     # Restore default route via LAN gateway so host keeps network
-    ip route add default via "$GATEWAY_IP" dev eth0 2>/dev/null || true
+    ip route replace default via "$GATEWAY_IP" dev eth0 2>/dev/null || true
     echo "Cleanup complete."
     exit 0
 }
@@ -77,8 +85,9 @@ source /scripts/postup.sh
 
 # --- Start dnsmasq for domain-based bypass ---
 echo "Starting dnsmasq for domain bypass..."
-dnsmasq -C /scripts/dnsmasq.conf
-echo "dnsmasq listening on port 5353"
+sed "s/__UPSTREAM_DNS__/$GATEWAY_IP/" /scripts/dnsmasq.conf > /tmp/dnsmasq.conf
+dnsmasq -C /tmp/dnsmasq.conf
+echo "dnsmasq listening on port 5353 (upstream: $GATEWAY_IP)"
 
 echo "Gateway ready. Starting watchdog..."
 
@@ -94,7 +103,9 @@ log() {
 
 while true; do
     sleep "$backoff_interval" &
-    wait $!
+    sleep_pid=$!
+    wait $sleep_pid
+    sleep_pid=
 
     # Check interface exists and is UP
     if ! ip link show awg0 up > /dev/null 2>&1; then
@@ -109,7 +120,7 @@ while true; do
             age=$((now - last_handshake))
             if [ "$age" -gt "$HANDSHAKE_MAX_AGE" ]; then
                 log "Handshake stale (${age}s old), testing connectivity..."
-                if ! ping -c1 -W5 -I awg0 100.64.0.1 > /dev/null 2>&1; then
+                if ! ping -c1 -W5 -I awg0 "$PING_TARGET" > /dev/null 2>&1; then
                     log "Ping failed, tunnel unhealthy"
                     fail_count=$((fail_count + 1))
                 else
@@ -124,7 +135,7 @@ while true; do
             fi
         else
             # No handshake yet, try ping
-            if ! ping -c1 -W5 -I awg0 100.64.0.1 > /dev/null 2>&1; then
+            if ! ping -c1 -W5 -I awg0 "$PING_TARGET" > /dev/null 2>&1; then
                 log "No handshake and ping failed"
                 fail_count=$((fail_count + 1))
             else
