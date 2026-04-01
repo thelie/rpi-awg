@@ -82,14 +82,20 @@ echo "Gateway ready. Starting watchdog..."
 # --- Watchdog loop ---
 set +e
 fail_count=0
+restart_count=0
+backoff_interval=$WATCHDOG_INTERVAL
+
+log() {
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] WATCHDOG: $1"
+}
 
 while true; do
-    sleep "$WATCHDOG_INTERVAL" &
+    sleep "$backoff_interval" &
     wait $!
 
     # Check interface exists and is UP
     if ! ip link show awg0 up > /dev/null 2>&1; then
-        echo "WATCHDOG: awg0 interface is DOWN"
+        log "awg0 interface is DOWN"
         fail_count=$((fail_count + 1))
     else
         # Check last handshake age
@@ -99,44 +105,56 @@ while true; do
         if [ -n "$last_handshake" ] && [ "$last_handshake" -gt 0 ] 2>/dev/null; then
             age=$((now - last_handshake))
             if [ "$age" -gt "$HANDSHAKE_MAX_AGE" ]; then
-                echo "WATCHDOG: Handshake stale (${age}s old), testing connectivity..."
+                log "Handshake stale (${age}s old), testing connectivity..."
                 if ! ping -c1 -W5 -I awg0 100.64.0.1 > /dev/null 2>&1; then
-                    echo "WATCHDOG: Ping failed, tunnel unhealthy"
+                    log "Ping failed, tunnel unhealthy"
                     fail_count=$((fail_count + 1))
                 else
                     fail_count=0
+                    restart_count=0
+                    backoff_interval=$WATCHDOG_INTERVAL
                 fi
             else
                 fail_count=0
+                restart_count=0
+                backoff_interval=$WATCHDOG_INTERVAL
             fi
         else
             # No handshake yet, try ping
             if ! ping -c1 -W5 -I awg0 100.64.0.1 > /dev/null 2>&1; then
-                echo "WATCHDOG: No handshake and ping failed"
+                log "No handshake and ping failed"
                 fail_count=$((fail_count + 1))
             else
                 fail_count=0
+                restart_count=0
+                backoff_interval=$WATCHDOG_INTERVAL
             fi
         fi
     fi
 
     # Restart tunnel if unhealthy
     if [ "$fail_count" -gt 0 ]; then
-        echo "WATCHDOG: Failure count: $fail_count/$MAX_FAILURES"
+        log "Failure count: $fail_count/$MAX_FAILURES"
         if [ "$fail_count" -ge "$MAX_FAILURES" ]; then
-            echo "WATCHDOG: Max failures reached, restarting tunnel..."
+            restart_count=$((restart_count + 1))
+            # Exponential backoff: 30s, 60s, 120s, 240s, max 300s (5min)
+            backoff_interval=$((WATCHDOG_INTERVAL * (2 ** (restart_count - 1))))
+            if [ "$backoff_interval" -gt 300 ]; then
+                backoff_interval=300
+            fi
+
+            log "Restart attempt #$restart_count, restarting tunnel..."
             awg-quick down "$CONF_RUNTIME" 2>/dev/null || true
             sleep 2
             awg-quick up "$CONF_RUNTIME" 2>/dev/null || true
 
             if ip link show awg0 up > /dev/null 2>&1; then
-                echo "WATCHDOG: Tunnel restarted successfully"
+                log "Tunnel restarted, next check in ${backoff_interval}s"
                 source /scripts/postup.sh
-                fail_count=0
             else
-                echo "WATCHDOG: Tunnel restart failed, will retry next cycle"
-                fail_count=0
+                log "Tunnel restart failed, retrying in ${backoff_interval}s"
             fi
+            fail_count=0
         fi
     fi
 done

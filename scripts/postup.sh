@@ -34,8 +34,8 @@ validate_ip "$GATEWAY_IP" "GATEWAY_IP"
 echo "Applying iptables rules..."
 
 # --- IPSET for domain-based bypass ---
-ipset create bypass_domains hash:ip timeout 86400 -exist
-echo "ipset 'bypass_domains' ready (entries expire after 24h)"
+ipset create bypass_domains hash:ip timeout 604800 -exist
+echo "ipset 'bypass_domains' ready (entries expire after 7d)"
 
 # --- Policy routing for bypassed traffic ---
 # Packets marked with fwmark 100 use routing table 100 (direct via LAN gateway)
