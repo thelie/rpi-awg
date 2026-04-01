@@ -33,8 +33,15 @@ validate_ip "$GATEWAY_IP" "GATEWAY_IP"
 
 echo "Applying iptables rules..."
 
+# Flush existing rules first (must happen before ipset destroy)
+iptables -F
+iptables -t nat -F
+iptables -t mangle -F
+iptables -X 2>/dev/null || true
+
 # --- IPSET for domain-based bypass ---
-ipset create bypass_domains hash:ip timeout 604800 -exist
+ipset destroy bypass_domains 2>/dev/null || true
+ipset create bypass_domains hash:ip timeout 604800
 echo "ipset 'bypass_domains' ready (entries expire after 7d)"
 
 # --- Policy routing for bypassed traffic ---
@@ -42,12 +49,6 @@ echo "ipset 'bypass_domains' ready (entries expire after 7d)"
 ip rule add fwmark 100 table 100 2>/dev/null || true
 ip route add default via "$GATEWAY_IP" table 100 2>/dev/null || true
 echo "Bypass routing table configured (table 100 via $GATEWAY_IP)"
-
-# Flush existing rules
-iptables -F
-iptables -t nat -F
-iptables -t mangle -F
-iptables -X 2>/dev/null || true
 
 # Default policies: DROP everything
 iptables -P INPUT DROP
