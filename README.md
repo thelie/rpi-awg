@@ -35,6 +35,10 @@ sudo sysctl --system
 git clone <repo-url> rpi-awg
 cd rpi-awg
 
+# Clone AmneziaWG source trees (built locally during Docker build)
+git clone https://github.com/amnezia-vpn/amneziawg-go.git
+git clone https://github.com/amnezia-vpn/amneziawg-tools.git
+
 # Copy your AmneziaWG config (must be named awg0.conf)
 cp /path/to/your.conf config/awg0.conf
 
@@ -56,6 +60,11 @@ On your GL-AXT1800:
 
 1. **DHCP gateway**: Admin panel → Network → LAN → DHCP → set default gateway to `192.168.8.145`
 2. **AdGuard upstream DNS**: AdGuard Home → Settings → DNS settings → set upstream to a DoH/DoT provider (e.g. `https://dns.google/dns-query` or `tls://1.1.1.1`). Since the router's gateway is the RPi, these queries exit through the VPN tunnel.
+3. **Domain bypass DNS** (optional): To use split tunneling, add domain-specific upstream forwarding in AdGuard Home → DNS settings → Upstream DNS:
+   ```
+   [/ru/github.com/reddit.com/steampowered.com/]192.168.8.145:5353
+   ```
+   This forwards bypass domains to dnsmasq on the RPi, which resolves them and adds IPs to the bypass ipset for direct routing.
 
 ## Verify
 
@@ -92,13 +101,25 @@ docker exec awg-client ip link set awg0 down
 docker exec awg-client awg-quick up /tmp/awg0.conf
 ```
 
+## Domain Bypass (Split Tunneling)
+
+Certain domains bypass the VPN and route directly through the LAN gateway. This is handled by dnsmasq + ipset + policy routing:
+
+1. AdGuard forwards bypass domain queries to dnsmasq (port 5353)
+2. dnsmasq resolves the domain and adds the IP to the `bypass_domains` ipset
+3. iptables marks matching packets with fwmark 100
+4. Policy routing sends marked packets via the LAN gateway (table 100)
+
+Bypass domains are configured in `scripts/dnsmasq.conf`. Default list: `*.ru`, GitHub, Reddit, Steam, VK, Yandex, Apple captive portal.
+
 ## Watchdog
 
 A built-in watchdog checks tunnel health every 30 seconds:
 - Verifies `awg0` interface is UP
 - Checks handshake freshness (< 180s)
-- Pings through tunnel if handshake is stale
+- Pings through tunnel if handshake is stale (configurable via `PING_TARGET`)
 - Auto-restarts tunnel after 3 consecutive failures
+- Exponential backoff on repeated failures (30s → 60s → 120s → 240s → 300s max)
 
 ## Common Operations
 
@@ -125,16 +146,20 @@ docker compose up -d
 | `GATEWAY_IP` | `192.168.8.1` | Router/gateway IP |
 | `VPN_ENDPOINT_IP` | — | VPN server IP from config |
 | `VPN_ENDPOINT_PORT` | — | VPN server port from config |
+| `PING_TARGET` | `100.64.0.1` | Watchdog ping target (VPN internal IP) |
 
 ## File Structure
 
 ```
 rpi-awg/
+├── amneziawg-go/            # AmneziaWG daemon source (clone separately)
+├── amneziawg-tools/         # AWG CLI tools source (clone separately)
 ├── config/
 │   └── awg0.conf            # Your AWG config (gitignored)
 ├── scripts/
 │   ├── entrypoint.sh        # Tunnel setup + watchdog
-│   └── postup.sh            # iptables kill switch + NAT
+│   ├── postup.sh            # iptables kill switch + NAT
+│   └── dnsmasq.conf         # DNS-based bypass domain config
 ├── Dockerfile               # Multi-stage build (amneziawg-go ARM64)
 ├── docker-compose.yml
 ├── .env                     # Network settings (gitignored)
