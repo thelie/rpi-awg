@@ -23,9 +23,12 @@ cleanup() {
     awg-quick down "$CONF_RUNTIME" 2>/dev/null || true
     iptables -F 2>/dev/null || true
     iptables -t nat -F 2>/dev/null || true
+    iptables -t mangle -F 2>/dev/null || true
     iptables -P INPUT ACCEPT 2>/dev/null || true
     iptables -P FORWARD ACCEPT 2>/dev/null || true
     iptables -P OUTPUT ACCEPT 2>/dev/null || true
+    # Restore default route via LAN gateway so host keeps network
+    ip route add default via "$GATEWAY_IP" dev eth0 2>/dev/null || true
     echo "Cleanup complete."
     exit 0
 }
