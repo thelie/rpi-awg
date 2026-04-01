@@ -37,7 +37,7 @@ trap cleanup SIGTERM SIGINT
 # --- Prepare runtime config ---
 if [ ! -f "$CONF_SRC" ]; then
     echo "ERROR: Config not found at $CONF_SRC" >&2
-    echo "Mount your AmneziaWG config to /etc/amneziawg/fi.conf" >&2
+    echo "Mount your AmneziaWG config to /etc/amneziawg/awg0.conf" >&2
     exit 1
 fi
 

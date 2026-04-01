@@ -89,8 +89,6 @@ iptables -A OUTPUT -o eth0 -m mark --mark 100 -j ACCEPT
 # Allow DNS resolution for dnsmasq (port 53 outbound)
 iptables -A OUTPUT -o eth0 -p udp --dport 53 -j ACCEPT
 iptables -A OUTPUT -o eth0 -p tcp --dport 53 -j ACCEPT
-# ICMP only through VPN
-iptables -A OUTPUT -o awg0 -p icmp -j ACCEPT
 
 # --- FORWARD (kill switch + bypass) ---
 # Allow bypassed traffic direct via eth0
